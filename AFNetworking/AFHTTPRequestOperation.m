@@ -56,6 +56,7 @@ static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
 
 @interface AFHTTPRequestOperation ()
 @property (readwrite, nonatomic, retain) NSError *HTTPError;
+@property (atomic) dispatch_semaphore_t dispatchSemaphore;
 @end
 
 @implementation AFHTTPRequestOperation
@@ -64,6 +65,8 @@ static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
 @synthesize HTTPError = _HTTPError;
 @synthesize successCallbackQueue = _successCallbackQueue;
 @synthesize failureCallbackQueue = _failureCallbackQueue;
+@synthesize dispatchGroup = _dispatchGroup;
+@synthesize dispatchSemaphore = _dispatchSemaphore;
 
 - (id)initWithRequest:(NSURLRequest *)request {
     self = [super initWithRequest:request];
@@ -72,7 +75,7 @@ static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
     }
     
     self.acceptableStatusCodes = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(200, 100)];
-    self.completionBlock = NULL;
+    self.dispatchSemaphore = dispatch_semaphore_create(1);
     
     return self;
 }
@@ -159,6 +162,31 @@ static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
     }    
 }
 
+- (void)setDispatchGroup:(dispatch_group_t)dispatchGroup {
+    dispatch_semaphore_wait(self.dispatchSemaphore, DISPATCH_TIME_FOREVER);
+    if (dispatchGroup != _dispatchGroup) {
+        if (_dispatchGroup) {
+            dispatch_release(_dispatchGroup);
+            _dispatchGroup = NULL;
+        }
+        
+        if (dispatchGroup) {
+            dispatch_retain(dispatchGroup);
+            _dispatchGroup = dispatchGroup;
+        }
+    } 
+    dispatch_semaphore_signal(self.dispatchSemaphore);
+}
+
+- (dispatch_group_t)dispatchGroup {
+    dispatch_semaphore_wait(self.dispatchSemaphore, DISPATCH_TIME_FOREVER);
+    if(_dispatchGroup == NULL) {
+        _dispatchGroup = dispatch_group_create();
+    }
+    dispatch_semaphore_signal(self.dispatchSemaphore);
+    return _dispatchGroup;
+}
+
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
 {
@@ -169,13 +197,13 @@ static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
         
         if (self.error) {
             if (failure) {
-                dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
+                dispatch_group_async(self.dispatchGroup, self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
                     failure(self, self.error);
                 });
             }
         } else {
             if (success) {
-                dispatch_async(self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
+                dispatch_group_async(self.dispatchGroup, self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
                     success(self, self.responseData);
                 });
             }

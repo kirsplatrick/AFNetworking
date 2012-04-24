@@ -516,20 +516,12 @@ static void AFReachabilityCallback(SCNetworkReachabilityRef __unused target, SCN
                             completionBlock:(void (^)(NSArray *operations))completionBlock
 {
     __block dispatch_group_t dispatchGroup = dispatch_group_create();
-    dispatch_retain(dispatchGroup);
-    NSBlockOperation *batchedOperation = [NSBlockOperation blockOperationWithBlock:^{
-        dispatch_group_notify(dispatchGroup, dispatch_get_main_queue(), ^{
-            if (completionBlock) {
-                completionBlock(operations);
-            }
-        });
-        dispatch_release(dispatchGroup);
-    }];
-
+    
     NSPredicate *finishedOperationPredicate = [NSPredicate predicateWithFormat:@"isFinished == YES"];
     
     for (AFHTTPRequestOperation *operation in operations) {
         AFCompletionBlock originalCompletionBlock = [[operation.completionBlock copy] autorelease];
+        operation.dispatchGroup = dispatchGroup;
         operation.completionBlock = ^{
             dispatch_group_async(dispatchGroup, dispatch_get_main_queue(), ^{
                 if (originalCompletionBlock) {
@@ -545,11 +537,16 @@ static void AFReachabilityCallback(SCNetworkReachabilityRef __unused target, SCN
         };
         
         dispatch_group_enter(dispatchGroup);
-        [batchedOperation addDependency:operation];
         
         [self enqueueHTTPRequestOperation:operation];
     }
-    [self.operationQueue addOperation:batchedOperation];
+    
+    dispatch_group_notify(dispatchGroup, dispatch_get_main_queue(), ^{
+        if (completionBlock) {
+            completionBlock(operations);
+        }
+    });
+    dispatch_release(dispatchGroup);
 }
 
 #pragma mark -
