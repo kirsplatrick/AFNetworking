@@ -95,6 +95,16 @@ static NSString * AFStringFromIndexSet(NSIndexSet *indexSet) {
         _failureCallbackQueue = NULL;
     }
 
+    if (_dispatchGroup) {
+        dispatch_release(_dispatchGroup);
+        _dispatchGroup = NULL;
+    }
+    
+    if (_dispatchSemaphore) {
+        dispatch_release(_dispatchSemaphore);
+        _dispatchSemaphore = NULL;
+    }
+    
     [super dealloc];
 }
 
