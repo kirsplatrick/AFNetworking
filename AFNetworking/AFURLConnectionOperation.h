@@ -78,6 +78,15 @@ extern NSString * const AFNetworkingOperationDidFinishNotification;
 @interface AFURLConnectionOperation : NSOperation
 
 ///-------------------------------
+/// @name Accessing Max Retries
+///-------------------------------
+
+/**
+ The maximum amount of retries the operation will attempt to make if a failure occurs on the connection
+ */
+@property (nonatomic, assign) NSUInteger maxRetries;
+
+///-------------------------------
 /// @name Accessing Run Loop Modes
 ///-------------------------------
 
@@ -94,6 +103,11 @@ extern NSString * const AFNetworkingOperationDidFinishNotification;
  The request used by the operation's connection.
  */
 @property (readonly, nonatomic, retain) NSURLRequest *request;
+
+/**
+ The backupRequest used by the operation's connection.
+ */
+@property (readonly, nonatomic, retain) NSURLRequest *backupRequest;
 
 /**
  The last response received by the operation's connection.
@@ -151,6 +165,17 @@ extern NSString * const AFNetworkingOperationDidFinishNotification;
  @discussion This is the designated initializer.
  */
 - (id)initWithRequest:(NSURLRequest *)urlRequest;
+
+/**
+ Initializes and returns a newly allocated operation object with a url connection configured with the specified url request.
+ This method allows an additional request to be used if the main url request fails.
+ 
+ @param urlRequest The request object to be used by the operation connection.
+ @param backupRequest The request object to be used by the operation connection if the main request fails
+ 
+ @discussion This is an alternate initializer.
+ */
+- (id)initWithRequest:(NSURLRequest *)urlRequest backupRequest:(NSURLRequest *)backupRequest;
 
 ///---------------------------------
 /// @name Setting Progress Callbacks

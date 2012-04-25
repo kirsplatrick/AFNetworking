@@ -87,8 +87,10 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
 @property (readwrite, nonatomic, assign) AFOperationState state;
 @property (readwrite, nonatomic, assign, getter = isCancelled) BOOL cancelled;
 @property (readwrite, nonatomic, retain) NSRecursiveLock *lock;
+@property (readwrite, nonatomic, assign) NSUInteger currentRetry;
 @property (readwrite, nonatomic, retain) NSURLConnection *connection;
 @property (readwrite, nonatomic, retain) NSURLRequest *request;
+@property (readwrite, nonatomic, retain) NSURLRequest *backupRequest;
 @property (readwrite, nonatomic, retain) NSURLResponse *response;
 @property (readwrite, nonatomic, retain) NSError *error;
 @property (readwrite, nonatomic, retain) NSData *responseData;
@@ -109,8 +111,10 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
 @synthesize state = _state;
 @synthesize cancelled = _cancelled;
 @synthesize connection = _connection;
+@synthesize maxRetries = _maxRetries;
 @synthesize runLoopModes = _runLoopModes;
 @synthesize request = _request;
+@synthesize backupRequest = _backupRequest;
 @synthesize response = _response;
 @synthesize error = _error;
 @synthesize responseData = _responseData;
@@ -125,6 +129,7 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
 @synthesize authenticationChallenge = _authenticationChallenge;
 @synthesize cacheResponse = _cacheResponse;
 @synthesize lock = _lock;
+@synthesize currentRetry = _currentRetry;
 
 + (void)networkRequestThreadEntryPoint:(id)__unused object {
     do {
@@ -170,6 +175,7 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
     [_runLoopModes release];
     
     [_request release];
+    [_backupRequest release];
     [_response release];
     [_error release];
     
@@ -299,6 +305,18 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
 
 - (BOOL)isConcurrent {
     return YES;
+}
+
+- (void)restart {
+    [self.lock lock];
+    self.response = nil;
+    self.error = nil;
+    self.responseData = nil;
+    self.responseString = nil;
+    self.state = AFHTTPOperationExecutingState;
+        
+    [self performSelector:@selector(operationDidStart) onThread:[[self class] networkRequestThread] withObject:nil waitUntilDone:NO modes:[self.runLoopModes allObjects]];
+    [self.lock unlock];
 }
 
 - (void)start {
@@ -485,9 +503,19 @@ didReceiveResponse:(NSURLResponse *)response
         [_dataAccumulator release]; _dataAccumulator = nil;
     }
     
-    [self finish];
-
     self.connection = nil;
+
+    if(self.currentRetry != self.maxRetries) {
+        if(self.backupRequest != nil) {
+            self.request = self.backupRequest;
+        }
+        
+        self.currentRetry++;
+        [self restart];
+    }
+    else {
+        [self finish];
+    }
 }
 
 - (NSCachedURLResponse *)connection:(NSURLConnection *)connection 
