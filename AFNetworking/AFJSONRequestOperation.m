@@ -23,15 +23,6 @@
 #import "AFJSONRequestOperation.h"
 #import "AFJSONUtilities.h"
 
-static dispatch_queue_t af_json_request_operation_processing_queue;
-static dispatch_queue_t json_request_operation_processing_queue() {
-    if (af_json_request_operation_processing_queue == NULL) {
-        af_json_request_operation_processing_queue = dispatch_queue_create("com.alamofire.networking.json-request.processing", 0);
-    }
-    
-    return af_json_request_operation_processing_queue;
-}
-
 @interface AFJSONRequestOperation ()
 @property (readwrite, nonatomic, retain) id responseJSON;
 @property (readwrite, nonatomic, retain) NSError *JSONError;
@@ -102,37 +93,11 @@ static dispatch_queue_t json_request_operation_processing_queue() {
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
 {
-    self.completionBlock = ^ {
-        if ([self isCancelled]) {
-            return;
-        }
-        
-        if (self.error) {
-            if (failure) {
-                dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
-                    failure(self, self.error);
-                });
-            }
-        } else {
-            dispatch_async(json_request_operation_processing_queue(), ^{
-                id JSON = self.responseJSON;
-                
-                if (self.JSONError) {
-                    if (failure) {
-                        dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
-                            failure(self, self.error);
-                        });
-                    }
-                } else {
-                    if (success) {
-                        dispatch_async(self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
-                            success(self, JSON);
-                        });
-                    }                    
-                }
-            });
-        }
-    };    
+    [super setCompletionBlockWithSuccess:success
+                                 failure:failure
+                                 process:^id {
+                                     return self.responseJSON;
+                                 }];  
 }
 
 @end

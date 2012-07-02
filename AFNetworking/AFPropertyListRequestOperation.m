@@ -22,15 +22,6 @@
 
 #import "AFPropertyListRequestOperation.h"
 
-static dispatch_queue_t af_property_list_request_operation_processing_queue;
-static dispatch_queue_t property_list_request_operation_processing_queue() {
-    if (af_property_list_request_operation_processing_queue == NULL) {
-        af_property_list_request_operation_processing_queue = dispatch_queue_create("com.alamofire.networking.property-list-request.processing", 0);
-    }
-    
-    return af_property_list_request_operation_processing_queue;
-}
-
 @interface AFPropertyListRequestOperation ()
 @property (readwrite, nonatomic, retain) id responsePropertyList;
 @property (readwrite, nonatomic, assign) NSPropertyListFormat propertyListFormat;
@@ -111,37 +102,11 @@ static dispatch_queue_t property_list_request_operation_processing_queue() {
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
 {
-    self.completionBlock = ^ {
-        if ([self isCancelled]) {
-            return;
-        }
-        
-        if (self.error) {
-            if (failure) {
-                dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
-                    failure(self, self.error);
-                });
-            }
-        } else {
-            dispatch_async(property_list_request_operation_processing_queue(), ^(void) {
-                id propertyList = self.responsePropertyList;
-                
-                if (self.propertyListError) {
-                    if (failure) {
-                        dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
-                            failure(self, self.error);
-                        });
-                    }
-                } else {
-                    if (success) {
-                        dispatch_async(self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
-                            success(self, propertyList);
-                        });
-                    } 
-                }
-            });
-        }
-    };    
+    [super setCompletionBlockWithSuccess:success
+                                 failure:failure
+                                 process:^id {
+                                     return self.responsePropertyList;
+                                 }];
 }
 
 @end

@@ -23,6 +23,15 @@
 #import "AFHTTPRequestOperation.h"
 #import <objc/runtime.h>
 
+static dispatch_queue_t af_parse_request_operation_processing_queue;
+static dispatch_queue_t parse_request_operation_processing_queue() {
+    if (af_parse_request_operation_processing_queue == NULL) {
+        af_parse_request_operation_processing_queue = dispatch_queue_create("com.alamofire.networking.parse-request.processing", 0);
+    }
+    
+    return af_parse_request_operation_processing_queue;
+}
+
 NSString * const kAFNetworkingIncompleteDownloadDirectoryName = @"Incomplete";
 
 NSSet * AFContentTypesFromHTTPHeader(NSString *string) {
@@ -117,6 +126,7 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
 @property (readwrite, nonatomic, retain) NSError *HTTPError;
 @property (assign) long long totalContentLength;
 @property (assign) long long offsetContentLength;
+
 @end
 
 @implementation AFHTTPRequestOperation
@@ -126,6 +136,7 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
 @synthesize failureCallbackQueue = _failureCallbackQueue;
 @synthesize totalContentLength = _totalContentLength;
 @synthesize offsetContentLength = _offsetContentLength;
+@synthesize dispatchGroup = _dispatchGroup;
 @dynamic request;
 @dynamic response;
 
@@ -142,6 +153,11 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
         _failureCallbackQueue = NULL;
     }
 
+    if (_dispatchGroup) {
+        dispatch_release(_dispatchGroup);
+        _dispatchGroup = NULL;
+    }
+    
     [super dealloc];
 }
 
@@ -223,26 +239,75 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
     }    
 }
 
+- (void)setDispatchGroup:(dispatch_group_t)dispatchGroup {
+    if (dispatchGroup != _dispatchGroup) {
+        if (_dispatchGroup) {
+            dispatch_release(_dispatchGroup);
+            _dispatchGroup = NULL;
+        }
+        
+        if (dispatchGroup) {
+            dispatch_retain(dispatchGroup);
+            _dispatchGroup = dispatchGroup;
+        }
+    }    
+}
+
+- (dispatch_group_t)dispatchGroup {
+    if(_dispatchGroup == NULL) {
+        _dispatchGroup = dispatch_group_create();
+    }
+    return _dispatchGroup;
+}
+
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
 {
+    [self setCompletionBlockWithSuccess:success
+                                failure:failure
+                                process:^id(id responseObject) {
+                                    return self.responseData;
+                                }];
+}
+
+- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
+                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
+                              process:(id (^)())process {
     self.completionBlock = ^ {
         if ([self isCancelled]) {
             return;
         }
         
+        // Check if there is an error before parsing return
         if (self.error) {
             if (failure) {
-                dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
+                dispatch_group_async(self.dispatchGroup, self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
                     failure(self, self.error);
                 });
             }
-        } else {
-            if (success) {
-                dispatch_async(self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
-                    success(self, self.responseData);
-                });
-            }
+        } 
+        
+        // Call parsing block
+        __block id object = nil;
+        if(process != NULL) {
+            dispatch_group_async(self.dispatchGroup, parse_request_operation_processing_queue(), ^{
+                object = process();
+                
+                // Check again if error was set from parsing
+                if (self.error) {
+                    if (failure) {
+                        dispatch_group_async(self.dispatchGroup, self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
+                            failure(self, self.error);
+                        });
+                    }
+                } else {
+                    if (success) {
+                        dispatch_group_async(self.dispatchGroup, self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
+                            success(self, object);
+                        });
+                    }
+                }
+            });
         }
     };
 }

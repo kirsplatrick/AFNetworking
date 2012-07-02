@@ -81,7 +81,7 @@ static dispatch_queue_t image_request_operation_processing_queue() {
             if (imageProcessingBlock) {
                 dispatch_async(image_request_operation_processing_queue(), ^(void) {
                     UIImage *processedImage = imageProcessingBlock(image);
-
+                    
                     dispatch_async(requestOperation.successCallbackQueue ? requestOperation.successCallbackQueue : dispatch_get_main_queue(), ^(void) {
                         success(operation.request, operation.response, processedImage);
                     });
@@ -112,7 +112,7 @@ static dispatch_queue_t image_request_operation_processing_queue() {
             if (imageProcessingBlock) {
                 dispatch_async(image_request_operation_processing_queue(), ^(void) {
                     NSImage *processedImage = imageProcessingBlock(image);
-
+                    
                     dispatch_async(requestOperation.successCallbackQueue ? requestOperation.successCallbackQueue : dispatch_get_main_queue(), ^(void) {
                         success(operation.request, operation.response, processedImage);
                     });
@@ -202,35 +202,18 @@ static dispatch_queue_t image_request_operation_processing_queue() {
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
 {
-    self.completionBlock = ^ {
-        if ([self isCancelled]) {
-            return;
-        }
-        
-        dispatch_async(image_request_operation_processing_queue(), ^(void) {
-            if (self.error) {
-                if (failure) {
-                    dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
-                        failure(self, self.error);
-                    });
-                }
-            } else {            
-                if (success) {
+    [super setCompletionBlockWithSuccess:success
+                                 failure:failure
+                                 process:^id {
 #if __IPHONE_OS_VERSION_MIN_REQUIRED
-                    UIImage *image = nil;
+                                     UIImage *image = nil;
 #elif __MAC_OS_X_VERSION_MIN_REQUIRED
-                    NSImage *image = nil;
+                                     NSImage *image = nil;
 #endif
-
-                    image = self.responseImage;
-
-                    dispatch_async(self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
-                        success(self, image);
-                    });
-                }
-            }
-        });        
-    };  
+                                     
+                                     image = self.responseImage;
+                                     return image;
+                                 }];
 }
 
 @end
