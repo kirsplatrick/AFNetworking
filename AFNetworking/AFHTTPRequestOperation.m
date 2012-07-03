@@ -21,6 +21,7 @@
 // THE SOFTWARE.
 
 #import "AFHTTPRequestOperation.h"
+
 #import <objc/runtime.h>
 
 static dispatch_queue_t af_parse_request_operation_processing_queue;
@@ -240,45 +241,39 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
 }
 
 - (void)setDispatchGroup:(dispatch_group_t)dispatchGroup {
-    if (dispatchGroup != _dispatchGroup) {
-        if (_dispatchGroup) {
-            dispatch_release(_dispatchGroup);
-            _dispatchGroup = NULL;
-        }
-        
-        if (dispatchGroup) {
-            dispatch_retain(dispatchGroup);
-            _dispatchGroup = dispatchGroup;
-        }
-    }    
+    @synchronized(self) {
+        if (dispatchGroup != _dispatchGroup) {
+            if (_dispatchGroup) {
+                dispatch_release(_dispatchGroup);
+                _dispatchGroup = NULL;
+            }
+            
+            if (dispatchGroup) {
+                dispatch_retain(dispatchGroup);
+                _dispatchGroup = dispatchGroup;
+            }
+        }  
+    }
 }
 
 - (dispatch_group_t)dispatchGroup {
-    if(_dispatchGroup == NULL) {
-        _dispatchGroup = dispatch_group_create();
+    @synchronized(self) {
+        if(_dispatchGroup == NULL) {
+            _dispatchGroup = dispatch_group_create();
+        }
     }
+
     return _dispatchGroup;
 }
 
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
-                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
-{
-    [self setCompletionBlockWithSuccess:success
-                                failure:failure
-                                process:^id(id responseObject) {
-                                    return self.responseData;
-                                }];
-}
-
-- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
-                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
-                              process:(id (^)())process {
+                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure {
     self.completionBlock = ^ {
         if ([self isCancelled]) {
             return;
         }
         
-        // Check if there is an error before parsing return
+        // Check if there is an error before parsing response
         if (self.error) {
             if (failure) {
                 dispatch_group_async(self.dispatchGroup, self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
@@ -288,27 +283,25 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
         } 
         
         // Call parsing block
-        __block id object = nil;
-        if(process != NULL) {
-            dispatch_group_async(self.dispatchGroup, parse_request_operation_processing_queue(), ^{
-                object = process();
-                
-                // Check again if error was set from parsing
-                if (self.error) {
-                    if (failure) {
-                        dispatch_group_async(self.dispatchGroup, self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
-                            failure(self, self.error);
-                        });
-                    }
-                } else {
-                    if (success) {
-                        dispatch_group_async(self.dispatchGroup, self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
-                            success(self, object);
-                        });
-                    }
+        __block id responseObject = nil;
+        dispatch_group_async(self.dispatchGroup, parse_request_operation_processing_queue(), ^{
+            responseObject = self.responseObject;
+            
+            // Check again if error was set from parsing
+            if (self.error) {
+                if (failure) {
+                    dispatch_group_async(self.dispatchGroup, self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
+                        failure(self, self.error);
+                    });
                 }
-            });
-        }
+            } else {
+                if (success) {
+                    dispatch_group_async(self.dispatchGroup, self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
+                        success(self, responseObject);
+                    });
+                }
+            }
+        });
     };
 }
 

@@ -121,6 +121,12 @@ extern NSString * const AFNetworkingOperationDidFinishNotification;
  */
 @property (readonly, nonatomic, copy) NSString *responseString;
 
+/**
+ The parsed response object created from the raw responseData.
+ @discussion By default this method returns responseData unparsed. Subclasses can implement their own parsing. Implementations should return 'nil' if a parsing error occurs and set the 'error' property as necessary.
+ */
+@property (readonly, nonatomic, retain) id responseObject;
+
 ///------------------------
 /// @name Accessing Streams
 ///------------------------

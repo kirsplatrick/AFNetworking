@@ -99,14 +99,8 @@
     return [[[request URL] pathExtension] isEqualToString:@"plist"] || [super canProcessRequest:request];
 }
 
-- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
-                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
-{
-    [super setCompletionBlockWithSuccess:success
-                                 failure:failure
-                                 process:^id {
-                                     return self.responsePropertyList;
-                                 }];
+- (id)responseObject {
+    return self.responsePropertyList;
 }
 
 @end

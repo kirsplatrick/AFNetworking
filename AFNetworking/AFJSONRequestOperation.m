@@ -90,14 +90,8 @@
     return [[[request URL] pathExtension] isEqualToString:@"json"] || [super canProcessRequest:request];
 }
 
-- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
-                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
-{
-    [super setCompletionBlockWithSuccess:success
-                                 failure:failure
-                                 process:^id {
-                                     return self.responseJSON;
-                                 }];  
+- (id)responseObject {
+    return self.responseJSON;
 }
 
 @end

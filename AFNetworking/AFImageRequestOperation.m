@@ -199,21 +199,8 @@ static dispatch_queue_t image_request_operation_processing_queue() {
     return [_acceptablePathExtension containsObject:[[request URL] pathExtension]] || [super canProcessRequest:request];    
 }
 
-- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
-                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
-{
-    [super setCompletionBlockWithSuccess:success
-                                 failure:failure
-                                 process:^id {
-#if __IPHONE_OS_VERSION_MIN_REQUIRED
-                                     UIImage *image = nil;
-#elif __MAC_OS_X_VERSION_MIN_REQUIRED
-                                     NSImage *image = nil;
-#endif
-                                     
-                                     image = self.responseImage;
-                                     return image;
-                                 }];
+- (id)responseObject {
+    return self.responseImage;
 }
 
 @end

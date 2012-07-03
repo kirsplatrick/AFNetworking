@@ -95,7 +95,7 @@ extern NSString * AFCreateIncompleteDownloadDirectoryPath(void);
 /** 
  The dispatch_group_t to call the completion block upon. If `NULL` (default), the main queue is used.
  */
-@property (nonatomic) dispatch_group_t dispatchGroup;
+@property (atomic) dispatch_group_t dispatchGroup;
 
 ///-------------------------------------------------------------
 /// @name Managing Accceptable HTTP Status Codes & Content Types
@@ -155,21 +155,5 @@ extern NSString * AFCreateIncompleteDownloadDirectoryPath(void);
  */
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure;
-
-///--------------------------------------------------------------------------------
-/// @name Setting Completion Block Success / Failure Callbacks and Processing Block
-///--------------------------------------------------------------------------------
-
-/**
- Sets the `completionBlock` property with a block that executes either the specified success or failure block, depending on the state of the request on completion. If `error` returns a value, which can be caused by an unacceptable status code or content type, then `failure` is executed. Otherwise, `success` is executed.
- 
- @param success The block to be executed on the completion of a successful request. This block has no return value and takes two arguments: the receiver operation and the object constructed from the response data of the request.
- @param failure The block to be executed on the completion of an unsuccessful request. This block has no return value and takes two arguments: the receiver operation and the error that occured during the request.
- @param process The block to be executed for processing the return response from the request. This block has a return value: The object to return in the success block and takes no arguments.
- @discussion This method should be overridden in subclasses in order to specify the response object passed into the success block.
- */
-- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
-                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
-                              process:(id (^)())process;
 
 @end

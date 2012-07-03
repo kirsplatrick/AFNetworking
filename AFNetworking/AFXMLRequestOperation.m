@@ -146,32 +146,9 @@ static dispatch_queue_t xml_request_operation_processing_queue() {
     return [[[request URL] pathExtension] isEqualToString:@"xml"] || [super canProcessRequest:request];
 }
 
-- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
-                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
-{
-    self.completionBlock = ^ {
-        if ([self isCancelled]) {
-            return;
-        }
-        
-        dispatch_async(xml_request_operation_processing_queue(), ^(void) {
-            NSXMLParser *XMLParser = self.responseXMLParser;
-            
-            if (self.error) {
-                if (failure) {
-                    dispatch_async(self.failureCallbackQueue ? self.failureCallbackQueue : dispatch_get_main_queue(), ^{
-                        failure(self, self.error);
-                    });
-                }
-            } else {
-                if (success) {
-                    dispatch_async(self.successCallbackQueue ? self.successCallbackQueue : dispatch_get_main_queue(), ^{
-                        success(self, XMLParser);
-                    });
-                } 
-            }
-        });
-    };    
+- (id)responseObject {
+    NSXMLParser *XMLParser = self.responseXMLParser;
+    return XMLParser;
 }
 
 @end

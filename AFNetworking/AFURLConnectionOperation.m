@@ -133,6 +133,7 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
 @synthesize error = _error;
 @synthesize responseData = _responseData;
 @synthesize responseString = _responseString;
+@synthesize responseObject = _responseObject;
 @synthesize totalBytesRead = _totalBytesRead;
 @dynamic inputStream;
 @synthesize outputStream = _outputStream;
@@ -196,6 +197,7 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
     
     [_responseData release];
     [_responseString release];
+    [_responseObject release];
     
     if (_outputStream) {
         [_outputStream close];
@@ -352,6 +354,10 @@ static inline BOOL AFStateTransitionIsValid(AFOperationState fromState, AFOperat
     [self.lock unlock];
     
     return _responseString;
+}
+
+- (id)responseObject {
+    return _responseData;
 }
 
 - (void)pause {
