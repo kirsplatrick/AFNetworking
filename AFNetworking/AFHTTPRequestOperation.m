@@ -135,6 +135,7 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
 @synthesize responseFilePath = _responseFilePath;
 @synthesize successCallbackQueue = _successCallbackQueue;
 @synthesize failureCallbackQueue = _failureCallbackQueue;
+@synthesize dataProcessingQueue = _dataProcessingQueue;
 @synthesize totalContentLength = _totalContentLength;
 @synthesize offsetContentLength = _offsetContentLength;
 @synthesize dispatchGroup = _dispatchGroup;
@@ -154,6 +155,11 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
         _failureCallbackQueue = NULL;
     }
 
+    if (_dataProcessingQueue) {
+        dispatch_release(_dataProcessingQueue);
+        _dataProcessingQueue = NULL;
+    }
+    
     if (_dispatchGroup) {
         dispatch_release(_dispatchGroup);
         _dispatchGroup = NULL;
@@ -240,6 +246,20 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
     }    
 }
 
+- (void)setDataProcessingQueue:(dispatch_queue_t)dataProcessingQueue {
+    if (dataProcessingQueue != _dataProcessingQueue) {
+        if (_dataProcessingQueue) {
+            dispatch_release(_dataProcessingQueue);
+            _dataProcessingQueue = NULL;
+        }
+        
+        if (dataProcessingQueue) {
+            dispatch_retain(dataProcessingQueue);
+            _dataProcessingQueue = dataProcessingQueue;
+        }
+    }    
+}
+
 - (void)setDispatchGroup:(dispatch_group_t)dispatchGroup {
     @synchronized(self) {
         if (dispatchGroup != _dispatchGroup) {
@@ -268,6 +288,14 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
 
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure {
+    [self setCompletionBlockWithSuccess:success
+                                failure:failure
+                    dataProcessingBlock:nil];
+}
+
+- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
+                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
+                  dataProcessingBlock:(id (^)(id))dataProcessingBlock {
     self.completionBlock = ^ {
         if ([self isCancelled]) {
             return;
@@ -284,8 +312,11 @@ NSString * AFCreateIncompleteDownloadDirectoryPath(void) {
         
         // Call parsing block
         __block id responseObject = nil;
-        dispatch_group_async(self.dispatchGroup, parse_request_operation_processing_queue(), ^{
+        dispatch_group_async(self.dispatchGroup, self.dataProcessingQueue ? self.dataProcessingQueue : parse_request_operation_processing_queue(), ^{
             responseObject = self.responseObject;
+            if (dataProcessingBlock) {
+                responseObject = dataProcessingBlock(responseObject);
+            }
             
             // Check again if error was set from parsing
             if (self.error) {

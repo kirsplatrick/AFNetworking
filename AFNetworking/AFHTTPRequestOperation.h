@@ -93,6 +93,11 @@ extern NSString * AFCreateIncompleteDownloadDirectoryPath(void);
 @property (nonatomic) dispatch_queue_t failureCallbackQueue;
 
 /** 
+ The background processing dispatch queue. If `NULL` (default), a default background queue is used.
+ */
+@property (nonatomic) dispatch_queue_t dataProcessingQueue;
+
+/** 
  The dispatch_group_t to call the completion block upon. If `NULL` (default), the main queue is used.
  */
 @property (atomic) dispatch_group_t dispatchGroup;
@@ -151,9 +156,25 @@ extern NSString * AFCreateIncompleteDownloadDirectoryPath(void);
  @param success The block to be executed on the completion of a successful request. This block has no return value and takes two arguments: the receiver operation and the object constructed from the response data of the request.
  @param failure The block to be executed on the completion of an unsuccessful request. This block has no return value and takes two arguments: the receiver operation and the error that occured during the request.
  
- @discussion This method should be overridden in subclasses in order to specify the response object passed into the success block.
  */
 - (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure;
+
+///-------------------------------------------------------------------------------------
+/// @name Setting Completion Block Success / Failure Callbacks and Data Processing Block
+///-------------------------------------------------------------------------------------
+
+/**
+ Sets the `completionBlock` property with a block that executes either the specified success or failure block, depending on the state of the request on completion. If `error` returns a value, which can be caused by an unacceptable status code or content type, then `failure` is executed. Otherwise, `success` is executed.
+ 
+ @param success The block to be executed on the completion of a successful request. This block has no return value and takes two arguments: the receiver operation and the object constructed from the response data of the request.
+ @param failure The block to be executed on the completion of an unsuccessful request. This block has no return value and takes two arguments: the receiver operation and the error that occured during the request.
+ @param dataProcessingBlock A block object to be executed after the image request finishes successfully, but before the image is returned in the `success` block. This block takes a single argument, the response object loaded from the response body, and returns the processed response object.
+ 
+ @discussion The dataProcessingBlock is run on a background parsing queue and does not need a parse queue wrapped around it. This method ensures that background processing does not affect batch enqueueing.
+ */
+- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
+                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
+                  dataProcessingBlock:(id (^)(id responseObject))dataProcessingBlock;
 
 @end

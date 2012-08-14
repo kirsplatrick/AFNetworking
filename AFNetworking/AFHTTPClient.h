@@ -365,6 +365,8 @@ extern NSString * AFQueryStringFromParametersWithEncoding(NSDictionary *paramete
  @param operations The request operations used to be batched and enqueued.
  @param progressBlock A block object to be executed upon the completion of each request operation in the batch. This block has no return value and takes two arguments: the number of operations that have already finished execution, and the total number of operations.
  @param completionBlock A block object to be executed upon the completion of all of the request operations in the batch. This block has no return value and takes a single argument: the batched request operations. 
+ 
+ @discussion If a dispatch_async call is used in the success/failure/processData block there is no gaurantee that the completionBlock for the batch will fire before the end of individual request operation blocks.
  */
 - (void)enqueueBatchOfHTTPRequestOperations:(NSArray *)operations 
                               progressBlock:(void (^)(NSUInteger numberOfCompletedOperations, NSUInteger totalNumberOfOperations))progressBlock 
