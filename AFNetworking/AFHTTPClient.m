@@ -559,7 +559,7 @@ static void AFNetworkReachabilityReleaseCallback(const void *info) {
 }
 
 - (void)enqueueBatchOfHTTPRequestOperationsWithRequests:(NSArray *)requests 
-                                          progressBlock:(void (^)(NSUInteger numberOfCompletedOperations, NSUInteger totalNumberOfOperations))progressBlock 
+                                          progressBlock:(void (^)(NSUInteger numberOfFinishedOperations, NSUInteger totalNumberOfOperations))progressBlock 
                                         completionBlock:(void (^)(NSArray *operations))completionBlock
 {
     NSMutableArray *mutableOperations = [NSMutableArray array];
@@ -572,12 +572,10 @@ static void AFNetworkReachabilityReleaseCallback(const void *info) {
 }
 
 - (void)enqueueBatchOfHTTPRequestOperations:(NSArray *)operations 
-                              progressBlock:(void (^)(NSUInteger numberOfCompletedOperations, NSUInteger totalNumberOfOperations))progressBlock 
+                              progressBlock:(void (^)(NSUInteger numberOfFinishedOperations, NSUInteger totalNumberOfOperations))progressBlock 
                             completionBlock:(void (^)(NSArray *operations))completionBlock
 {
     __block dispatch_group_t dispatchGroup = dispatch_group_create();
-    
-    NSPredicate *finishedOperationPredicate = [NSPredicate predicateWithFormat:@"isFinished == YES"];
     
     for (AFHTTPRequestOperation *operation in operations) {
         AFCompletionBlock originalCompletionBlock = [[operation.completionBlock copy] autorelease];
@@ -586,8 +584,15 @@ static void AFNetworkReachabilityReleaseCallback(const void *info) {
                 originalCompletionBlock();
             }
             
+            __block NSUInteger numberOfFinishedOperations = 0;
+            [operations enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+                if ([(NSOperation *)obj isFinished]) {
+                    numberOfFinishedOperations++;
+                }
+            }];
+            
             if (progressBlock) {
-                progressBlock([[operations filteredArrayUsingPredicate:finishedOperationPredicate] count], [operations count]);
+                progressBlock(numberOfFinishedOperations, [operations count]);
             }
             
             dispatch_group_leave(dispatchGroup);
@@ -656,6 +661,47 @@ static void AFNetworkReachabilityReleaseCallback(const void *info) {
     NSURLRequest *request = [self requestWithMethod:@"PATCH" path:path parameters:parameters];
 	AFHTTPRequestOperation *operation = [self HTTPRequestOperationWithRequest:request success:success failure:failure];
     [self enqueueHTTPRequestOperation:operation];
+}
+
+#pragma mark - NSCoding
+
+- (id)initWithCoder:(NSCoder *)aDecoder {
+    NSURL *baseURL = [aDecoder decodeObjectForKey:@"baseURL"];
+    
+    self = [self initWithBaseURL:baseURL];
+    if (!self) {
+        return nil;
+    }
+    
+    self.stringEncoding = [aDecoder decodeIntegerForKey:@"stringEncoding"];
+    self.parameterEncoding = [aDecoder decodeIntegerForKey:@"parameterEncoding"];
+    self.registeredHTTPOperationClassNames = [aDecoder decodeObjectForKey:@"registeredHTTPOperationClassNames"];
+    self.defaultHeaders = [aDecoder decodeObjectForKey:@"defaultHeaders"];
+    
+    return self;
+}
+
+- (void)encodeWithCoder:(NSCoder *)aCoder {
+    [aCoder encodeObject:self.baseURL forKey:@"baseURL"];
+    [aCoder encodeInteger:self.stringEncoding forKey:@"stringEncoding"];
+    [aCoder encodeInteger:self.parameterEncoding forKey:@"parameterEncoding"];
+    [aCoder encodeObject:self.registeredHTTPOperationClassNames forKey:@"registeredHTTPOperationClassNames"];
+    [aCoder encodeObject:self.defaultHeaders forKey:@"defaultHeaders"];
+}
+
+#pragma mark - NSCopying
+
+- (id)copyWithZone:(NSZone *)zone {
+    AFHTTPClient *HTTPClient = [[[self class] allocWithZone:zone] initWithBaseURL:self.baseURL];
+    
+    HTTPClient.stringEncoding = self.stringEncoding;
+    HTTPClient.parameterEncoding = self.parameterEncoding;
+    HTTPClient.registeredHTTPOperationClassNames = [[self.registeredHTTPOperationClassNames copyWithZone:zone] autorelease];
+    HTTPClient.defaultHeaders = [[self.defaultHeaders copyWithZone:zone] autorelease];
+#ifdef _SYSTEMCONFIGURATION_H
+    HTTPClient.networkReachabilityStatusBlock = self.networkReachabilityStatusBlock;
+#endif
+    return HTTPClient;
 }
 
 @end
